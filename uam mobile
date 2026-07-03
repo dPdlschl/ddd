@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>화성시 UAM vs 구급차 응급 이송 비교 (모바일)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0b0f1a;--panel:#111827;--border:#1e2d45;
+  --text:#e2e8f0;--muted:#64748b;--accent:#06b6d4;--accent2:#a855f7;
+}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);
+     height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;}
+
+header{background:var(--panel);border-bottom:1px solid var(--border);
+       padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;z-index:20;}
+header h1{font-size:.86rem;font-weight:700;line-height:1.3;}
+header h1 span{color:var(--accent);}
+.badge{margin-left:auto;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);
+       color:var(--accent);font-size:.58rem;padding:3px 8px;border-radius:999px;white-space:nowrap;}
+
+/* ── 모바일: 지도가 전체 화면, 패널은 하단 바텀시트로 슬라이드 ── */
+.layout{position:relative;flex:1;overflow:hidden;}
+#map{position:absolute;inset:0;background:#0d1117;}
+
+aside{position:absolute;left:0;right:0;bottom:0;
+      max-height:78vh;max-height:78dvh;
+      background:var(--panel);border-top:1px solid var(--border);
+      border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.5);
+      display:flex;flex-direction:column;overflow-y:auto;
+      transform:translateY(calc(100% - 64px));
+      transition:transform .28s cubic-bezier(.2,.8,.3,1);
+      z-index:15;}
+aside.expanded{transform:translateY(0);}
+aside::-webkit-scrollbar{width:4px;}
+aside::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+.sheet-handle{flex-shrink:0;position:sticky;top:0;background:var(--panel);z-index:2;
+  padding:10px 14px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;
+  cursor:pointer;border-bottom:1px solid var(--border);}
+.sheet-handle .bar{width:38px;height:4px;border-radius:3px;background:var(--border);}
+.sheet-handle .sheet-title{font-size:.78rem;font-weight:700;display:flex;align-items:center;gap:8px;}
+.sheet-handle .sheet-sub{font-size:.62rem;color:var(--muted);}
+
+.sec{font-size:.6rem;font-weight:700;letter-spacing:.12em;color:var(--muted);
+     text-transform:uppercase;padding:14px 14px 6px;display:flex;align-items:center;justify-content:space-between;}
+label.lbl{font-size:.7rem;color:var(--muted);display:block;margin-bottom:4px;}
+.irow{padding:0 14px 10px;display:flex;gap:8px;}
+.irow>div{flex:1;}
+input[type=number],input[type=text],input[type=password],select{
+  width:100%;background:#0b0f1a;border:1px solid var(--border);color:var(--text);
+  padding:11px 12px;border-radius:9px;font-size:.9rem;outline:none;transition:border-color .2s;
+  min-height:44px;}
+input:focus,select:focus{border-color:var(--accent);}
+select{appearance:none;}
+
+.hosp-item{padding:12px 12px;border-radius:10px;cursor:pointer;transition:all .15s;
+           border:1px solid transparent;margin:0 12px 6px;min-height:44px;}
+.hosp-item:hover{background:rgba(255,255,255,.04);}
+.hosp-item.active{background:rgba(168,85,247,.1);border-color:rgba(168,85,247,.4);}
+.hosp-name{font-size:.84rem;font-weight:600;}
+.hosp-loc{font-size:.68rem;color:var(--muted);margin-top:2px;}
+
+.param-wrap{padding:0 14px 12px;display:flex;flex-direction:column;gap:9px;}
+
+.btn-calc{width:calc(100% - 28px);margin:0 14px 10px;background:var(--accent);color:#0b0f1a;
+  border:none;padding:14px;border-radius:11px;font-size:.92rem;font-weight:700;cursor:pointer;
+  transition:all .2s;box-shadow:0 4px 14px rgba(6,182,212,.3);min-height:48px;}
+.btn-calc:hover{opacity:.85;}
+.btn-calc:disabled{background:#1e2d45;color:var(--muted);cursor:not-allowed;box-shadow:none;}
+
+.btn-ai{width:calc(100% - 28px);margin:0 14px 14px;background:linear-gradient(135deg,#a855f7,#6366f1);
+  color:#fff;border:none;padding:14px;border-radius:11px;font-size:.92rem;font-weight:700;cursor:pointer;
+  transition:all .2s;box-shadow:0 4px 14px rgba(168,85,247,.3);min-height:48px;}
+.btn-ai:hover{opacity:.85;}
+.btn-ai:disabled{background:#1e2d45;color:var(--muted);cursor:not-allowed;box-shadow:none;}
+
+.info-box{margin:0 14px 10px;padding:7px 10px;background:#0b0f1a;border:1px solid var(--border);
+          border-radius:7px;font-size:.65rem;color:var(--muted);line-height:1.6;}
+
+.result-card{margin:0 14px 10px;border:1px solid var(--border);border-radius:10px;overflow:hidden;display:none;}
+.result-card.show{display:block;}
+.rrow{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);
+      border-bottom:1px solid var(--border);}
+.rrow:last-child{border-bottom:none;}
+.rdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.rlabel{flex:1;font-size:.7rem;color:var(--muted);}
+.rval{font-size:.82rem;font-weight:700;}
+
+.verdict{margin:0 14px 14px;padding:12px 14px;border-radius:10px;text-align:center;
+         font-size:.8rem;font-weight:700;line-height:1.7;display:none;}
+.verdict.show{display:block;}
+.verdict.uam{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5;}
+.verdict.amb{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:#93c5fd;}
+
+.via-badge{margin:0 14px 8px;padding:7px 10px;background:rgba(245,158,11,.08);
+           border:1px solid rgba(245,158,11,.3);border-radius:7px;font-size:.7rem;
+           color:#fbbf24;display:none;}
+.via-badge.show{display:block;}
+
+.hazard-badge{margin:0 14px 8px;padding:7px 10px;background:rgba(249,115,22,.08);
+           border:1px solid rgba(249,115,22,.3);border-radius:7px;font-size:.68rem;
+           color:#fdba74;display:none;line-height:1.6;}
+.hazard-badge.show{display:block;}
+
+.err-box{margin:0 14px 10px;padding:8px 10px;background:rgba(239,68,68,.08);
+         border:1px solid rgba(239,68,68,.25);border-radius:7px;font-size:.68rem;
+         color:#fca5a5;display:none;line-height:1.5;}
+.err-box.show{display:block;}
+
+.ai-box{margin:0 14px 14px;padding:10px 12px;background:rgba(168,85,247,.08);
+        border:1px solid rgba(168,85,247,.3);border-radius:9px;font-size:.72rem;
+        color:#e9d5ff;display:none;line-height:1.7;white-space:pre-wrap;}
+.ai-box.show{display:block;}
+.ai-box .ai-title{font-size:.62rem;font-weight:700;letter-spacing:.08em;color:var(--accent2);
+        text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+
+.legend{padding:0 14px 20px;display:flex;flex-direction:column;gap:7px;}
+.li{display:flex;align-items:center;gap:10px;font-size:.72rem;color:#94a3b8;}
+.ll{width:24px;height:4px;border-radius:2px;flex-shrink:0;}
+.ld{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+
+#map{flex:1;background:#0d1117;}
+.leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) saturate(.9);}
+.leaflet-marker-pane,.leaflet-overlay-pane{filter:none!important;}
+.leaflet-popup-content-wrapper{background:#1e293b;color:#e2e8f0;border-radius:10px;
+  box-shadow:0 4px 20px rgba(0,0,0,.4);border:1px solid #334155;}
+.leaflet-popup-tip{background:#1e293b;}
+.leaflet-popup-content{margin:10px 14px;font-size:13px;line-height:1.5;}
+
+#overlay{position:fixed;inset:0;background:rgba(11,15,26,.75);display:none;
+         align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:12px;}
+#overlay.show{display:flex;}
+.spinner{width:38px;height:38px;border:3px solid rgba(6,182,212,.2);
+         border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+.spin-label{font-size:.78rem;color:var(--accent);}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+details.apikeybox{margin:0 14px 10px;}
+details.apikeybox summary{font-size:.68rem;color:var(--muted);cursor:pointer;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>화성시 <span>UAM</span> vs 구급차<br>응급 이송 효율 비교 지도</h1>
+  </div>
+  <span class="badge">OSM · OSRM · Groq AI</span>
+</header>
+
+<div class="layout">
+<div id="map"></div>
+<aside id="sheet">
+  <div class="sheet-handle" id="sheetHandle">
+    <div class="bar"></div>
+    <div class="sheet-title">🚁 UAM vs 🚑 구급차 분석 패널</div>
+    <div class="sheet-sub" id="sheetSub">눌러서 펼치기 / 접기</div>
+  </div>
+  <div class="sec">📍 출발지</div>
+  <div class="irow">
+    <div><label class="lbl">위도</label><input type="number" id="sLat" value="37.2002" step="0.001"/></div>
+    <div><label class="lbl">경도</label><input type="number" id="sLng" value="126.8318" step="0.001"/></div>
+  </div>
+  <div style="padding:0 14px 10px;font-size:.67rem;color:#475569;">💡 지도 클릭으로 출발지 설정 가능</div>
+
+  <div class="sec">🏥 목적지 병원</div>
+  <div id="hospList"></div>
+
+  <div class="sec">⚙️ 파라미터 (PDF 기준값)</div>
+  <div class="param-wrap">
+    <div><label class="lbl">UAM 순항 속도 (km/h) · 한화 버터플라이</label><input type="number" id="uamSpeed" value="200" min="50" max="500"/></div>
+    <div><label class="lbl">UAM 이착륙 시간 (분)</label><input type="number" id="uamLand" value="5" min="1" max="30"/></div>
+    <div><label class="lbl">구급차 평균 속도 (km/h) · 스타리아 HEV</label><input type="number" id="ambSpeed" value="60" min="20" max="150"/></div>
+    <div><label class="lbl">UAM 유리 판정 기준 (분)</label><input type="number" id="thresh" value="5" min="1" max="30"/></div>
+  </div>
+
+  <div class="info-box">
+    🔴 UAM → 직선 경로 (장애물 무시 비행)<br>
+    🚁 UAM 시간 = <b>출동(환승장→환자)</b> + 이송(환자→병원)<br>
+    🔵 구급차 → 실제 도로 경로 (OSRM, 화성시 내 실제 굴곡 도로 반영)<br>
+    📐 직선 15km 이상 시 환승장 경유<br>
+    🟠 상습정체 교차로 / 🟣 사고다발구간 통과 시<br>&nbsp;&nbsp;구급차 시간에 지연 가산 (탐구보고서 사진1·2 기반)
+  </div>
+
+  <button class="btn-calc" id="btnCalc" onclick="calculate()">🚀 경로 분석 시작</button>
+
+  <details class="apikeybox">
+    <summary>🔑 Groq API 설정</summary>
+    <div style="padding:8px 0 0;display:flex;flex-direction:column;gap:7px;">
+      <div><label class="lbl">Groq API Key</label>
+        <input type="text" autocomplete="off" spellcheck="false" id="groqKey" placeholder="여기에 당신의 API 코드를 입력하세요"
+          oninput="document.getElementById('keyLenHint').textContent='현재 입력된 글자 수: '+this.value.replace(/\s+/g,'').length+'자';"/>
+        <div id="keyLenHint" style="font-size:.6rem;color:#475569;margin-top:3px;">현재 입력된 글자 수: 0자</div>
+      </div>
+      <div><label class="lbl">모델</label>
+        <select id="groqModel">
+          <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+          <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+          <option value="deepseek-r1-distill-llama-70b">deepseek-r1-distill-llama-70b</option>
+        </select>
+      </div>
+      <div style="font-size:.62rem;color:var(--muted);line-height:1.5;">
+        API 키는 브라우저에서만 사용되며 저장/전송되지 않습니다.<br>
+        console.groq.com 에서 무료 발급 가능.
+      </div>
+    </div>
+  </details>
+
+  <button class="btn-ai" id="btnAI" onclick="runAIcorrection()" disabled>🤖 AI로 예상시간 보정 + 최종 판정</button>
+
+  <div class="err-box" id="errBox"></div>
+
+  <div class="sec">📊 분석 결과 (규칙 기반)</div>
+  <div class="via-badge" id="viaBadge"></div>
+  <div class="hazard-badge" id="hazardBadge"></div>
+  <div class="result-card" id="resCard">
+    <div class="rrow"><div class="rdot" style="background:#fbbf24"></div><div class="rlabel">UAM 출동(픽업) 시간</div><div class="rval" id="rDispatch">—</div></div>
+    <div class="rrow"><div class="rdot" style="background:#ef4444"></div><div class="rlabel">UAM 총 예상 시간</div><div class="rval" id="rUam">—</div></div>
+    <div class="rrow"><div class="rdot" style="background:#3b82f6"></div><div class="rlabel">구급차 예상 시간</div><div class="rval" id="rAmb">—</div></div>
+    <div class="rrow"><div class="rdot" style="background:#f97316"></div><div class="rlabel">정체/사고구역 지연 가산</div><div class="rval" id="rHazMin">—</div></div>
+    <div class="rrow"><div class="rdot" style="background:#64748b"></div><div class="rlabel">시간 차이</div><div class="rval" id="rDiff">—</div></div>
+    <div class="rrow"><div class="rdot" style="background:#ef4444"></div><div class="rlabel">UAM 직선 거리</div><div class="rval" id="rStraight">—</div></div>
+    <div class="rrow"><div class="rdot" style="background:#3b82f6"></div><div class="rlabel">구급차 도로 거리</div><div class="rval" id="rRoad">—</div></div>
+  </div>
+  <div class="verdict" id="verdict"></div>
+
+  <div class="sec">🤖 AI 보정 결과 (Groq)</div>
+  <div class="ai-box" id="aiBox"></div>
+
+  <div class="sec">🗺️ 범례</div>
+  <div class="legend">
+    <div class="li"><div class="ll" style="background:#ef4444"></div>UAM 직선 경로</div>
+    <div class="li"><div class="ll" style="background:#3b82f6"></div>구급차 도로 경로</div>
+    <div class="li"><div class="ld" style="background:#22c55e"></div>출발지</div>
+    <div class="li"><div class="ld" style="background:#a855f7"></div>목적지 병원</div>
+    <div class="li"><div class="ld" style="background:#f59e0b"></div>UAM 환승 지점</div>
+    <div class="li"><div class="ld" style="background:#f97316"></div>상습 정체 교차로</div>
+    <div class="li"><div class="ld" style="background:#dc2626"></div>사고다발 구간</div>
+    <div class="li"><div class="ld" style="background:#84cc16"></div>일차선/농촌 도로 구간</div>
+  </div>
+</aside>
+</div>
+
+<div id="overlay">
+  <div class="spinner"></div>
+  <div class="spin-label" id="spinLabel">도로 경로 불러오는 중…</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// 데이터 (탐구보고서 + 웹 조사 기반)
+// ══════════════════════════════════════════════
+const HOSPITALS = [
+  {id:1,name:"한림대동탄성심병원",loc:"동탄",   lat:37.2055,lng:127.0798},
+  {id:2,name:"화성시의료원",      loc:"남양읍", lat:37.2032,lng:126.8125},
+  {id:3,name:"봉담성모병원",      loc:"봉담읍", lat:37.2188,lng:126.9801},
+  {id:4,name:"화성중앙병원",      loc:"향남읍", lat:37.0701,lng:126.9742},
+];
+
+const TRANSFERS = [
+  {name:"동탄 버티포트(가칭)",         lat:37.2010,lng:127.0750},
+  {name:"향남읍 한두골길 환승장(구 쓰레기처리장 부지)", lat:37.0658,lng:126.9187},
+  {name:"매송면 야목리 환승장(휴게소 인근)",           lat:37.2199,lng:126.8965},
+  {name:"제부도 환승장(헬기장)",         lat:37.1730,lng:126.6691},
+];
+const TRANSFER_KM = 15;
+
+const CONGESTION_ZONES = [
+  {name:"동탄역 사거리(치동중 인근·1번국도)", lat:37.2005, lng:127.0958, r:600,
+   note:"보고서 사진1 지점. 사방 합류 + 버스 통행량 과다로 상시 정체"},
+  {name:"병점사거리(효행로×태안로, 병점역 인근)", lat:37.2064, lng:127.0328, r:500,
+   note:"출퇴근 시간 극심한 정체 구간"},
+  {name:"봉담IC 교차로(향남·봉담 고속화도로 합류)", lat:37.2075, lng:126.9803, r:500,
+   note:"고속도로 진출입 차량 합류로 상습 정체"},
+  {name:"향남터미널사거리", lat:37.0701, lng:126.9742, r:450,
+   note:"향남읍 중심 상권 진입로, 화물차 혼재"},
+  {name:"남양읍사무소사거리(시청 인근)", lat:37.2032, lng:126.8125, r:400,
+   note:"남양읍 중심가 병목"},
+];
+
+const ACCIDENT_ZONES = [
+  {name:"매송IC 부근(서해안고속도로 진입)", lat:37.2199, lng:126.8965, r:700,
+   note:"고속도로 합류 구간 사고다발"},
+  {name:"향남산업단지 진입로", lat:37.0620, lng:126.9430, r:600,
+   note:"대형 화물차 통행량 많아 사고 위험 높음"},
+  {name:"봉담IC~향남 고속화도로 구간", lat:37.1450, lng:126.9600, r:800,
+   note:"고속 주행 구간, 야간 사고 다발"},
+];
+
+const RURAL_ZONES = [
+  {name:"서신면 일대(제부도 방면 일차선 농로)", lat:37.1980, lng:126.6900, r:1500},
+  {name:"향남읍 외곽 농경지(발안 서편)", lat:37.0500, lng:126.8900, r:1500},
+  {name:"매송면 농촌 지역", lat:37.2300, lng:126.8500, r:1200},
+];
+
+let selHosp = HOSPITALS[0];
+let startMarker=null, hospMarker=null;
+let uamLayer=null, ambLayer=null, txHighlight=null, txMarkers=[];
+let lastCalc=null;
+
+// ── 모바일 바텀시트 토글 ──
+const sheetEl=document.getElementById('sheet');
+const sheetHandle=document.getElementById('sheetHandle');
+const sheetSub=document.getElementById('sheetSub');
+function setSheet(expand){
+  sheetEl.classList.toggle('expanded',expand);
+  sheetSub.textContent = expand ? '눌러서 접기 ▾' : '눌러서 펼치기 ▴';
+}
+sheetHandle.addEventListener('click',()=>{
+  setSheet(!sheetEl.classList.contains('expanded'));
+});
+// 시작 시 살짝 접힌 상태(핸들만 보임)로 시작
+setSheet(false);
+
+const map = L.map('map',{center:[37.17,126.93],zoom:11,zoomControl:false});
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',maxZoom:19
+}).addTo(map);
+
+function mkIcon(color,emoji,sz){
+  sz=sz||34;
+  return L.divIcon({className:'',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],
+    html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${color};
+      border:3px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;
+      font-size:${sz*.42}px;box-shadow:0 2px 14px rgba(0,0,0,.6);">${emoji}</div>`});
+}
+
+function drawTransfers(){
+  txMarkers.forEach(m=>map.removeLayer(m));
+  txMarkers=[];
+  TRANSFERS.forEach(t=>{
+    const m=L.marker([t.lat,t.lng],{icon:mkIcon('#f59e0b','✈',30)})
+      .addTo(map)
+      .bindPopup(`<b>${t.name}</b><br><span style="color:#94a3b8;font-size:11px">UAM 환승 지점</span>`);
+    txMarkers.push(m);
+  });
+}
+drawTransfers();
+
+function drawHazardZones(){
+  CONGESTION_ZONES.forEach(z=>{
+    L.circle([z.lat,z.lng],{radius:z.r,color:'#f97316',weight:2,fillColor:'#f97316',fillOpacity:.15})
+      .addTo(map).bindPopup(`🟠 <b>상습 정체 교차로</b><br>${z.name}<br><span style="color:#94a3b8;font-size:11px">${z.note}</span>`);
+    L.marker([z.lat,z.lng],{icon:mkIcon('#f97316','🚦',24)}).addTo(map)
+      .bindPopup(`🟠 <b>상습 정체 교차로</b><br>${z.name}`);
+  });
+  ACCIDENT_ZONES.forEach(z=>{
+    L.circle([z.lat,z.lng],{radius:z.r,color:'#dc2626',weight:2,fillColor:'#dc2626',fillOpacity:.12,dashArray:'4 4'})
+      .addTo(map).bindPopup(`🔴 <b>사고다발 구간</b><br>${z.name}<br><span style="color:#94a3b8;font-size:11px">${z.note}</span>`);
+  });
+  RURAL_ZONES.forEach(z=>{
+    L.circle([z.lat,z.lng],{radius:z.r,color:'#84cc16',weight:1.5,fillColor:'#84cc16',fillOpacity:.08,dashArray:'2 6'})
+      .addTo(map).bindPopup(`🟢 <b>일차선/농촌 도로 구간</b><br>${z.name}<br><span style="color:#94a3b8;font-size:11px">구급차 접근 지연 가능 (보고서 사진2 근거)</span>`);
+  });
+}
+drawHazardZones();
+
+function setStart(lat,lng){
+  if(startMarker) map.removeLayer(startMarker);
+  startMarker=L.marker([lat,lng],{icon:mkIcon('#22c55e','📍',34),draggable:true})
+    .addTo(map).bindPopup('<b>출발지</b>');
+  startMarker.on('dragend',e=>{
+    const p=e.target.getLatLng();
+    document.getElementById('sLat').value=p.lat.toFixed(4);
+    document.getElementById('sLng').value=p.lng.toFixed(4);
+  });
+}
+setStart(37.2002,126.8318);
+
+function setHosp(h){
+  if(hospMarker) map.removeLayer(hospMarker);
+  hospMarker=L.marker([h.lat,h.lng],{icon:mkIcon('#a855f7','🏥',34)})
+    .addTo(map).bindPopup(`<b>${h.name}</b>`);
+}
+setHosp(selHosp);
+
+map.on('click',e=>{
+  const {lat,lng}=e.latlng;
+  document.getElementById('sLat').value=lat.toFixed(4);
+  document.getElementById('sLng').value=lng.toFixed(4);
+  setStart(lat,lng);
+});
+
+function renderHosps(){
+  const el=document.getElementById('hospList');
+  el.innerHTML='';
+  HOSPITALS.forEach(h=>{
+    const d=document.createElement('div');
+    d.className='hosp-item'+(h.id===selHosp.id?' active':'');
+    d.innerHTML=`<div class="hosp-name">${h.name}</div><div class="hosp-loc">${h.loc}</div>`;
+    d.onclick=()=>{ selHosp=h; renderHosps(); setHosp(h); };
+    el.appendChild(d);
+  });
+}
+renderHosps();
+
+function hav(la1,lo1,la2,lo2){
+  const R=6371, dL=(la2-la1)*Math.PI/180, dO=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dO/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function pointNearZone(la,lo,zone){
+  return hav(la,lo,zone.lat,zone.lng)*1000 <= zone.r*1.15;
+}
+
+function detectHazardsOnRoute(coords){
+  const hit={congestion:[],accident:[],rural:[]};
+  if(!coords||!coords.length) return hit;
+  const sample = coords.filter((_,i)=>i%3===0);
+  CONGESTION_ZONES.forEach(z=>{ if(sample.some(([la,lo])=>pointNearZone(la,lo,z))) hit.congestion.push(z); });
+  ACCIDENT_ZONES.forEach(z=>{ if(sample.some(([la,lo])=>pointNearZone(la,lo,z))) hit.accident.push(z); });
+  RURAL_ZONES.forEach(z=>{ if(sample.some(([la,lo])=>pointNearZone(la,lo,z))) hit.rural.push(z); });
+  return hit;
+}
+
+async function fetchRoad(la1,lo1,la2,lo2){
+  // 화성시 내부의 구불구불한 실제 도로망을 OSRM 라우팅 엔진이 OpenStreetMap 도로 그래프
+  // 기준으로 실시간 계산하도록, 여러 미러 서버를 순서대로 시도하고 서버당 최대 2회 재시도한다.
+  const endpoints=[
+    `https://router.project-osrm.org/route/v1/driving/${lo1},${la1};${lo2},${la2}?overview=full&geometries=geojson&steps=false`,
+    `https://routing.openstreetmap.de/routed-car/route/v1/driving/${lo1},${la1};${lo2},${la2}?overview=full&geometries=geojson&steps=false`,
+    `https://osrm.router.place/route/v1/driving/${lo1},${la1};${lo2},${la2}?overview=full&geometries=geojson&steps=false`,
+  ];
+  let lastErr=null;
+  for(const url of endpoints){
+    for(let attempt=0; attempt<2; attempt++){
+      try{
+        const r=await fetch(url,{signal:AbortSignal.timeout(15000)});
+        if(!r.ok){ lastErr=new Error(`HTTP ${r.status}`); continue; }
+        const d=await r.json();
+        if(!d.routes||!d.routes.length){ lastErr=new Error('경로 없음'); continue; }
+        const rt=d.routes[0];
+        // 실제 도로 형상(다수의 좌표점)을 그대로 반환 → 화성시의 구불구불한 도로가 폴리라인에 정밀 반영됨
+        return{ km: rt.distance/1000, coords: rt.geometry.coordinates.map(([lo,la])=>[la,lo]) };
+      }catch(e){ lastErr=e; }
+    }
+  }
+  throw lastErr||new Error('모든 라우팅 서버 실패');
+}
+
+function nearTx(la,lo){
+  let best=null,bd=Infinity;
+  TRANSFERS.forEach(t=>{ const d=hav(la,lo,t.lat,t.lng); if(d<bd){bd=d;best=t;} });
+  return best;
+}
+
+function clearRoutes(){
+  if(uamLayer){map.removeLayer(uamLayer);uamLayer=null;}
+  if(ambLayer){map.removeLayer(ambLayer);ambLayer=null;}
+  if(txHighlight){map.removeLayer(txHighlight);txHighlight=null;}
+}
+
+function showErr(msg){ const b=document.getElementById('errBox'); b.textContent=msg; b.classList.add('show'); }
+function hideErr(){ document.getElementById('errBox').classList.remove('show'); }
+function setSpinLabel(t){ document.getElementById('spinLabel').textContent=t; }
+
+async function calculate(){
+  const sLat=parseFloat(document.getElementById('sLat').value);
+  const sLng=parseFloat(document.getElementById('sLng').value);
+  if(isNaN(sLat)||isNaN(sLng)){alert('출발지를 설정해주세요.');return;}
+
+  const dLat=selHosp.lat, dLng=selHosp.lng;
+  const uamSpd=parseFloat(document.getElementById('uamSpeed').value)||200;
+  const uamLnd=parseFloat(document.getElementById('uamLand').value)||5;
+  const ambSpd=parseFloat(document.getElementById('ambSpeed').value)||60;
+  const thresh=parseFloat(document.getElementById('thresh').value)||5;
+
+  setStart(sLat,sLng);
+  setHosp(selHosp);
+  clearRoutes();
+  hideErr();
+  document.getElementById('resCard').classList.remove('show');
+  document.getElementById('verdict').classList.remove('show');
+  document.getElementById('viaBadge').classList.remove('show');
+  document.getElementById('hazardBadge').classList.remove('show');
+  document.getElementById('aiBox').classList.remove('show');
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('btnCalc').disabled=true;
+  document.getElementById('btnAI').disabled=true;
+
+  try{
+    setSpinLabel('🔵 구급차 도로 경로 불러오는 중…');
+    let ambKm, ambMin, ambCoords=[];
+    let roadOk=false;
+    try{
+      const a=await fetchRoad(sLat,sLng,dLat,dLng);
+      ambKm=a.km; ambCoords=a.coords; ambMin=(ambKm/ambSpd)*60; roadOk=true;
+    }catch(e){
+      ambKm=hav(sLat,sLng,dLat,dLng)*1.4;
+      ambMin=(ambKm/ambSpd)*60;
+      showErr('⚠️ 도로 데이터를 불러오지 못했습니다. 직선거리×1.4로 구급차 거리를 추정합니다.');
+    }
+
+    const hazards = detectHazardsOnRoute(ambCoords);
+    let hazMin = hazards.congestion.length*4 + hazards.accident.length*3 + hazards.rural.length*2;
+    ambMin += hazMin;
+
+    const straight=hav(sLat,sLng,dLat,dLng);
+    const via=straight>=TRANSFER_KM;
+    let uamMin, tx=null;
+    let uamCoords=[];
+
+    // ── 🚁 UAM 출동(디스패치) 시간: 가장 가까운 환승장(버티포트)에서 대기 중이던 UAM이
+    //    환자 위치까지 날아와서 착륙·환자 탑승을 완료하는 시간까지 반드시 포함한다 ──
+    setSpinLabel('🔴 가장 가까운 환승장에서 UAM 출동 중…');
+    const dispatchTx = nearTx(sLat,sLng);           // 환자와 가장 가까운 환승장(버티포트)
+    const dispatchKm = hav(dispatchTx.lat,dispatchTx.lng,sLat,sLng);
+    const dispatchMin = (dispatchKm/uamSpd)*60 + uamLnd; // 출동 비행시간 + 착륙/환자탑승 시간
+
+    if(via){
+      tx=nearTx(sLat,sLng); // 이송(하강)용 환승장도 동일하게 환자 인근 환승장 사용
+      setSpinLabel('🔴 UAM 환승 경로 계산 중…');
+      const fromTxKm=hav(tx.lat,tx.lng,dLat,dLng);
+      let toTxMin;
+      try{
+        setSpinLabel('🔴 환승장까지 도로 경로 계산 중…');
+        const seg=await fetchRoad(sLat,sLng,tx.lat,tx.lng);
+        toTxMin=(seg.km/ambSpd)*60;
+        const segHaz=detectHazardsOnRoute(seg.coords);
+        toTxMin += segHaz.congestion.length*4 + segHaz.accident.length*3 + segHaz.rural.length*2;
+      }catch{
+        const toTxKm=hav(sLat,sLng,tx.lat,tx.lng);
+        toTxMin=(toTxKm*1.4/ambSpd)*60;
+      }
+      const flightMin=(fromTxKm/uamSpd)*60;
+      uamMin=dispatchMin+toTxMin+uamLnd+flightMin;
+      uamCoords=[[dispatchTx.lat,dispatchTx.lng],[sLat,sLng],[tx.lat,tx.lng],[dLat,dLng]];
+    }else{
+      uamMin=dispatchMin+(straight/uamSpd)*60+uamLnd;
+      uamCoords=[[dispatchTx.lat,dispatchTx.lng],[sLat,sLng],[dLat,dLng]];
+    }
+
+    const diff=ambMin-uamMin;
+    const uamWin=diff>=thresh;
+
+    if(ambCoords.length>1){
+      ambLayer=L.polyline(ambCoords,{
+        color:'#3b82f6', weight: uamWin?4:6, opacity: uamWin?0.5:0.95,
+        dashArray: uamWin?'8 5':null, lineJoin:'round', lineCap:'round'
+      }).addTo(map)
+        .bindPopup(`🚑 <b>구급차</b><br>도로 거리: ${ambKm.toFixed(1)}km<br>예상 시간: ${ambMin.toFixed(1)}분 (지연가산 ${hazMin}분 포함)`);
+    }else if(!roadOk){
+      ambLayer=L.polyline([[sLat,sLng],[dLat,dLng]],{color:'#3b82f6',weight:4,opacity:0.5,dashArray:'6 8'})
+        .addTo(map).bindPopup(`🚑 구급차 추정: ${ambMin.toFixed(1)}분 (도로 데이터 없음)`);
+    }
+
+    uamLayer=L.polyline(uamCoords,{
+      color:'#ef4444', weight: uamWin?6:4, opacity: uamWin?0.95:0.5,
+      dashArray: uamWin?null:'8 5', lineJoin:'round', lineCap:'round'
+    }).addTo(map)
+      .bindPopup(`🚁 <b>UAM</b><br>출동 환승장: ${dispatchTx.name}<br>출동(환자 픽업) 시간: ${dispatchMin.toFixed(1)}분<br>직선 거리(환자→병원): ${straight.toFixed(1)}km<br>총 예상 시간: ${uamMin.toFixed(1)}분`);
+
+    if(via && tx){
+      txHighlight=L.circleMarker([tx.lat,tx.lng],{radius:20,color:'#ef4444',weight:3,fillColor:'#fef3c7',fillOpacity:.5})
+        .addTo(map).bindPopup(`🔁 환승: ${tx.name}`);
+    }
+
+    const bounds=[[sLat,sLng],[dLat,dLng]];
+    if(via&&tx) bounds.push([tx.lat,tx.lng]);
+    if(ambCoords.length) ambCoords.forEach(c=>bounds.push(c));
+    map.fitBounds(bounds,{padding:[60,60]});
+
+    document.getElementById('rDispatch').textContent=`${dispatchMin.toFixed(1)}분 (${dispatchTx.name})`;
+    document.getElementById('rUam').textContent=`${uamMin.toFixed(1)}분`;
+    document.getElementById('rAmb').textContent=`${ambMin.toFixed(1)}분`;
+    document.getElementById('rHazMin').textContent=`+${hazMin}분`;
+    document.getElementById('rDiff').textContent=`${Math.abs(diff).toFixed(1)}분`;
+    document.getElementById('rStraight').textContent=`${straight.toFixed(1)}km`;
+    document.getElementById('rRoad').textContent=roadOk?`${ambKm.toFixed(1)}km`:`~${ambKm.toFixed(1)}km (추정)`;
+    document.getElementById('resCard').classList.add('show');
+
+    if(via){
+      const vb=document.getElementById('viaBadge');
+      vb.textContent=`✈ ${tx.name} 경유`;
+      vb.classList.add('show');
+    }
+
+    const totalHaz = hazards.congestion.length+hazards.accident.length+hazards.rural.length;
+    if(totalHaz>0){
+      const hb=document.getElementById('hazardBadge');
+      const parts=[];
+      if(hazards.congestion.length) parts.push(`🟠정체 ${hazards.congestion.length}곳`);
+      if(hazards.accident.length) parts.push(`🔴사고다발 ${hazards.accident.length}곳`);
+      if(hazards.rural.length) parts.push(`🟢농촌/일차선 ${hazards.rural.length}곳`);
+      hb.textContent='⚠ 구급차 경로 통과 위험구역: '+parts.join(', ');
+      hb.classList.add('show');
+    }
+
+    const vd=document.getElementById('verdict');
+    vd.className='verdict show '+(uamWin?'uam':'amb');
+    vd.innerHTML=uamWin
+      ?`🚁 UAM이 <b>${Math.abs(diff).toFixed(1)}분</b> 빠릅니다<br>UAM 유리 구간`
+      :`🚑 구급차가 <b>${Math.abs(diff).toFixed(1)}분</b> 빠릅니다<br>구급차 유리 구간`;
+
+    lastCalc={
+      start:{lat:sLat,lng:sLng}, hospital:selHosp,
+      uamMin, ambMin, hazMin, diff, uamWin,
+      dispatchTx:dispatchTx.name, dispatchKm, dispatchMin,
+      straightKm:straight, roadKm:ambKm, roadOk,
+      via, transfer: tx?tx.name:null,
+      hazards:{
+        congestion:hazards.congestion.map(z=>z.name),
+        accident:hazards.accident.map(z=>z.name),
+        rural:hazards.rural.map(z=>z.name)
+      },
+      params:{uamSpd,uamLnd,ambSpd,thresh}
+    };
+    document.getElementById('btnAI').disabled=false;
+
+  }catch(e){
+    console.error(e);
+    showErr('오류: '+e.message);
+  }
+
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('btnCalc').disabled=false;
+  setSheet(false); // 계산 완료 후 지도를 크게 볼 수 있도록 시트를 접음 (핸들을 눌러 결과 확인)
+}
+
+async function runAIcorrection(){
+  if(!lastCalc){ alert('먼저 "경로 분석 시작"을 눌러 계산을 완료해주세요.'); return; }
+  const keyEl=document.getElementById('groqKey');
+  const rawVal = keyEl ? keyEl.value : null;
+  console.log('[디버그] groqKey 엘리먼트 찾음:', !!keyEl, '/ 원본 값 길이:', rawVal?rawVal.length:'null', '/ 원본 값:', JSON.stringify(rawVal));
+  const apiKey=(rawVal||'').replace(/\s+/g,'').trim();
+  if(!apiKey){
+    alert('Groq API Key를 입력해주세요.\n\n[디버그 정보]\n입력칸 인식: '+(keyEl?'정상':'⚠ 엘리먼트를 찾지 못함(HTML이 깨졌을 수 있음)')+
+      '\n읽어들인 값의 길이: '+(rawVal?rawVal.length:0)+'\n\n※ 값 길이가 0이면 → 입력칸에 실제로 키가 입력되지 않은 것입니다. 주소창에 붙여넣지 마시고 반드시 "Groq API Key" 라고 적힌 회색 안내문구가 있는 칸을 직접 클릭한 뒤 붙여넣어 주세요.\n※ "확인" 후에도 이 창이 뜬다면 F12(개발자도구)를 열고 Console 탭 스크린샷을 보내주세요.');
+    return;
+  }
+  const model=document.getElementById('groqModel').value;
+
+  const aiBox=document.getElementById('aiBox');
+  aiBox.classList.add('show');
+  aiBox.innerHTML='<div class="ai-title">🤖 GROQ AI 분석중…</div>AI가 정체/사고구역 데이터를 반영해 예상시간을 보정하고 있습니다...';
+  document.getElementById('btnAI').disabled=true;
+
+  const c=lastCalc;
+  const systemPrompt=`너는 대한민국 화성시의 응급의료 이송 전문가이자 교통 데이터 분석가다.
+아래 규칙기반 계산 결과와 통과 위험구역 정보를 바탕으로, 실제 상황을 고려한 "보정된 예상 소요시간"과
+UAM(도심항공모빌리티) vs 구급차(현대 스타리아 하이브리드) 중 어느 이송수단이 더 유리한지 최종 판정을 내려라.
+고려 요소: 상습정체교차로/사고다발구간/일차선농촌도로를 통과하는 구급차는 규칙기반보다 추가로 지연될 가능성,
+UAM은 기상(강풍/우천 시 결항 가능성)과 이착륙장 접근성 리스크가 있음을 함께 감안하라.
+답변은 반드시 한국어로, 아래 형식을 지켜 간결하게 작성하라(마크다운 기호 사용 금지, 순수 텍스트):
+
+[보정 결과]
+- UAM 보정 예상시간: (분)
+- 구급차 보정 예상시간: (분)
+- 최종 판정: (UAM 유리 / 구급차 유리) - 이유 한 줄
+
+[상세 분석]
+(3~5줄로 위험구역 통과 영향, 리스크 요인, 판단 근거 서술)
+
+[권고사항]
+(1~2줄로 실무적 제안)`;
+
+  const userPrompt=`[규칙기반 계산 결과]
+출발지: 위도 ${c.start.lat}, 경도 ${c.start.lng}
+목적지 병원: ${c.hospital.name} (${c.hospital.loc})
+UAM 출동 환승장(가장 가까운 버티포트): ${c.dispatchTx} / 출동거리: ${c.dispatchKm.toFixed(1)}km / 출동(환자 픽업) 소요시간: ${c.dispatchMin.toFixed(1)}분 (이미 아래 총 예상시간에 포함됨)
+UAM 직선거리(환자→병원): ${c.straightKm.toFixed(1)}km / UAM 총 예상시간(출동+이송, 규칙기반): ${c.uamMin.toFixed(1)}분
+구급차 도로거리: ${c.roadKm.toFixed(1)}km (${c.roadOk?'실제 도로데이터':'추정치'}) / 구급차 예상시간(규칙기반, 지연가산 포함): ${c.ambMin.toFixed(1)}분
+구급차 경로에 반영된 지연 가산: ${c.hazMin}분
+UAM 환승 경유 여부: ${c.via? '경유 ('+c.transfer+')' : '직항'}
+구급차 경로가 통과하는 상습정체 교차로: ${c.hazards.congestion.length? c.hazards.congestion.join(', ') : '없음'}
+구급차 경로가 통과하는 사고다발구간: ${c.hazards.accident.length? c.hazards.accident.join(', ') : '없음'}
+구급차 경로가 통과하는 일차선/농촌 도로구간: ${c.hazards.rural.length? c.hazards.rural.join(', ') : '없음'}
+파라미터: UAM속도 ${c.params.uamSpd}km/h, UAM이착륙 ${c.params.uamLnd}분, 구급차속도 ${c.params.ambSpd}km/h, UAM유리판정기준 ${c.params.thresh}분
+
+위 데이터를 바탕으로 보정 분석과 최종 판정을 제시해줘.`;
+
+  try{
+    const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+apiKey },
+      body:JSON.stringify({
+        model,
+        messages:[
+          {role:'system',content:systemPrompt},
+          {role:'user',content:userPrompt}
+        ],
+        temperature:0.4,
+        max_tokens:700
+      })
+    });
+    if(!res.ok){
+      const errText=await res.text();
+      throw new Error(`Groq API 오류 (${res.status}): ${errText.slice(0,200)}`);
+    }
+    const data=await res.json();
+    const answer=data.choices?.[0]?.message?.content || 'AI 응답을 받지 못했습니다.';
+    aiBox.innerHTML='<div class="ai-title">🤖 GROQ AI 보정 분석 (모델: '+model+')</div>'+answer.replace(/</g,'&lt;');
+  }catch(e){
+    console.error(e);
+    aiBox.innerHTML='<div class="ai-title">⚠ 오류</div>AI 분석 중 오류가 발생했습니다: '+e.message+
+      '<br><br>· API Key가 올바른지, console.groq.com에서 발급받은 키인지 확인해주세요.<br>· 브라우저 콘솔(F12)에서 CORS 관련 오류 여부도 확인해보세요.';
+  }
+  document.getElementById('btnAI').disabled=false;
+}
+</script>
+</body>
+</html>
